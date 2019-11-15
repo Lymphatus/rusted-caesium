@@ -58,8 +58,13 @@ fn main() {
     let opt = Opt::from_args();
     let mut args: Vec<PathBuf> = opt.files;
 
-    let input = args.remove(0).into_os_string().into_string().unwrap();
-    let output = opt.output.into_os_string().into_string().unwrap();
+    let input_buf = args.remove(0);
+    let input_filename = input_buf.file_name().unwrap().to_os_string();
+    let input = input_buf.into_os_string().into_string().unwrap();
+    let mut output_buf = opt.output;
+    output_buf.push(input_filename);
+
+    let output = output_buf.into_os_string().into_string().unwrap();
 
     let mut cs_pars: cspars::CsImagePars = Default::default();
     cs_pars.jpeg.quality = opt.quality;
