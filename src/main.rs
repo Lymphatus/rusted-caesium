@@ -6,11 +6,14 @@ use structopt::StructOpt;
 use std::os::raw::c_char;
 use std::ffi::CString;
 
+use indicatif::ProgressBar;
+use std::process::exit;
+
 mod cspars;
 
 #[link(name = "caesium")]
 extern {
-    fn cs_compress(origin: *const c_char, destination: *const c_char, pars: cspars::CsImagePars) -> bool;
+    fn cs_compress(origin: *const c_char, destination: *const c_char, pars: &mut cspars::CsImagePars) -> bool;
 }
 
 #[derive(StructOpt, Debug)]
@@ -56,25 +59,33 @@ struct Opt {
 
 fn main() {
     let opt = Opt::from_args();
-    let mut args: Vec<PathBuf> = opt.files;
-
-    let input_buf = args.remove(0);
-    let input_filename = input_buf.file_name().unwrap().to_os_string();
-    let input = input_buf.into_os_string().into_string().unwrap();
-    let mut output_buf = opt.output;
-    output_buf.push(input_filename);
-
-    let output = output_buf.into_os_string().into_string().unwrap();
+    let args: Vec<PathBuf> = opt.files;
 
     let mut cs_pars: cspars::CsImagePars = Default::default();
     cs_pars.jpeg.quality = opt.quality;
 
-    let origin_str = CString::new(input).unwrap();
-    let origin: *const c_char = origin_str.as_ptr();
-    let destination_str = CString::new(output).unwrap();
-    let destination: *const c_char = destination_str.as_ptr();
+    let pb = ProgressBar::new(args.len() as u64);
 
-    unsafe {
-        cs_compress(origin, destination, cs_pars);
+    for input_file in args.into_iter() {
+        let input_filename = input_file.file_name().unwrap().to_os_string();
+        let input = input_file.into_os_string().into_string().unwrap();
+
+        let mut output_buf: PathBuf = opt.output.clone();
+        output_buf.push(input_filename);
+
+        let output = output_buf.into_os_string().into_string().unwrap();
+
+        let origin_str = CString::new(input).unwrap();
+        let origin: *const c_char = origin_str.as_ptr();
+        let destination_str = CString::new(output).unwrap();
+        let destination: *const c_char = destination_str.as_ptr();
+
+        unsafe {
+            cs_compress(origin, destination, &mut cs_pars);
+            pb.inc(1);
+        }
     }
+    pb.finish_with_message("done");
+
+    exit(0);
 }
