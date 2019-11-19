@@ -1,19 +1,25 @@
 extern crate libc;
 
 use std::path::PathBuf;
+use std::sync::Arc;
 use structopt::StructOpt;
 
-use std::os::raw::c_char;
 use std::ffi::CString;
+use std::os::raw::c_char;
 
 use indicatif::ProgressBar;
 use std::process::exit;
+use std::thread;
 
 mod cspars;
 
 #[link(name = "caesium")]
-extern {
-    fn cs_compress(origin: *const c_char, destination: *const c_char, pars: &mut cspars::CsImagePars) -> bool;
+extern "C" {
+    fn cs_compress(
+        origin: *const c_char,
+        destination: *const c_char,
+        pars: &cspars::CsImagePars,
+    ) -> bool;
 }
 
 #[derive(StructOpt, Debug)]
@@ -57,6 +63,7 @@ struct Opt {
     files: Vec<PathBuf>,
 }
 
+
 fn main() {
     let opt = Opt::from_args();
     let args: Vec<PathBuf> = opt.files;
@@ -66,6 +73,10 @@ fn main() {
 
     let pb = ProgressBar::new(args.len() as u64);
 
+    let pars_arc = Arc::new(cs_pars);
+
+    let mut children = vec![];
+
     for input_file in args.into_iter() {
         let input_filename = input_file.file_name().unwrap().to_os_string();
         let input = input_file.into_os_string().into_string().unwrap();
@@ -74,16 +85,23 @@ fn main() {
         output_buf.push(input_filename);
 
         let output = output_buf.into_os_string().into_string().unwrap();
+        let passed_pars = pars_arc.clone();
+        let destination_str = CString::new(output).unwrap();
 
         let origin_str = CString::new(input).unwrap();
-        let origin: *const c_char = origin_str.as_ptr();
-        let destination_str = CString::new(output).unwrap();
-        let destination: *const c_char = destination_str.as_ptr();
+        children.push(thread::spawn(move || {
+            let origin: *const c_char = origin_str.as_ptr();
+            let destination: *const c_char = destination_str.as_ptr();
 
-        unsafe {
-            cs_compress(origin, destination, &mut cs_pars);
-            pb.inc(1);
-        }
+            // println!("{:?} -> {:?}", origin_str, destination_str);
+            unsafe {
+                cs_compress(origin, destination, &passed_pars);
+            }
+        }));
+    }
+    for child in children {
+        let _ = child.join();
+        pb.inc(1);
     }
     pb.finish_with_message("done");
 
