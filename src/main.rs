@@ -7,9 +7,12 @@ use structopt::StructOpt;
 use std::ffi::CString;
 use std::os::raw::c_char;
 
-use indicatif::ProgressBar;
+// use indicatif::ProgressBar;
 use std::process::exit;
-use std::thread;
+// use std::thread;
+use threadpool::ThreadPool;
+use walkdir::WalkDir;
+
 
 mod cspars;
 
@@ -63,47 +66,68 @@ struct Opt {
     files: Vec<PathBuf>,
 }
 
-
 fn main() {
     let opt = Opt::from_args();
     let args: Vec<PathBuf> = opt.files;
 
     let mut cs_pars: cspars::CsImagePars = Default::default();
     cs_pars.jpeg.quality = opt.quality;
+    cs_pars.jpeg.exif_copy = opt.exif;
+    cs_pars.jpeg.scale_factor = opt.scale;
+    cs_pars.png.scale_factor = opt.scale;
 
-    let pb = ProgressBar::new(args.len() as u64);
+    // let pb = ProgressBar::new(args.len() as u64);
 
     let pars_arc = Arc::new(cs_pars);
 
-    let mut children = vec![];
+    let n_workers = 4;
+    let pool = ThreadPool::new(n_workers);
 
-    for input_file in args.into_iter() {
+    let mut files: Vec<PathBuf> = vec![];
+
+    for input in args.into_iter() {
+        if input.is_dir() {
+            for entry in WalkDir::new(input).into_iter().filter_map(|e| e.ok()) {
+                files.push(PathBuf::from(entry.path()));
+            }
+        } else {
+            files.push(input);
+        }
+    }
+
+    for input_file in files.into_iter() {
         let input_filename = input_file.file_name().unwrap().to_os_string();
-        let input = input_file.into_os_string().into_string().unwrap();
-
+        let input = input_file.clone().into_os_string().into_string().unwrap();
         let mut output_buf: PathBuf = opt.output.clone();
         output_buf.push(input_filename);
-
         let output = output_buf.into_os_string().into_string().unwrap();
         let passed_pars = pars_arc.clone();
         let destination_str = CString::new(output).unwrap();
-
         let origin_str = CString::new(input).unwrap();
-        children.push(thread::spawn(move || {
+
+        pool.execute(move || {
             let origin: *const c_char = origin_str.as_ptr();
             let destination: *const c_char = destination_str.as_ptr();
-
-            // println!("{:?} -> {:?}", origin_str, destination_str);
             unsafe {
                 cs_compress(origin, destination, &passed_pars);
             }
-        }));
+            println!(
+                "{:?} -> {:?}",
+                origin_str,
+                destination_str,
+            );
+            // pb.inc(1);
+        });
     }
-    for child in children {
-        let _ = child.join();
-        pb.inc(1);
-    }
-    pb.finish_with_message("done");
+
+    pool.join();
+    // let mut children = vec![];
+
+    // for child in children {
+    //     let _ = child.join();
+    //     // pb.inc(1);
+    // }
+    // pb.finish_with_message("done");
 
     exit(0);
 }
