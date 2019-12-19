@@ -1,4 +1,5 @@
 extern crate libc;
+extern crate num_cpus;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -12,7 +13,6 @@ use std::process::exit;
 // use std::thread;
 use threadpool::ThreadPool;
 use walkdir::WalkDir;
-
 
 mod cspars;
 
@@ -80,7 +80,7 @@ fn main() {
 
     let pars_arc = Arc::new(cs_pars);
 
-    let n_workers = 4;
+    let n_workers = num_cpus::get();
     let pool = ThreadPool::new(n_workers);
 
     let mut files: Vec<PathBuf> = vec![];
