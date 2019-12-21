@@ -8,7 +8,8 @@ use structopt::StructOpt;
 use std::ffi::CString;
 use std::os::raw::c_char;
 
-// use indicatif::ProgressBar;
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
 use std::process::exit;
 // use std::thread;
 use threadpool::ThreadPool;
@@ -76,8 +77,6 @@ fn main() {
     cs_pars.jpeg.scale_factor = opt.scale;
     cs_pars.png.scale_factor = opt.scale;
 
-    // let pb = ProgressBar::new(args.len() as u64);
-
     let pars_arc = Arc::new(cs_pars);
 
     let n_workers = num_cpus::get();
@@ -88,14 +87,23 @@ fn main() {
     for input in args.into_iter() {
         if input.is_dir() {
             for entry in WalkDir::new(input).into_iter().filter_map(|e| e.ok()) {
-                files.push(PathBuf::from(entry.path()));
+                let entry: PathBuf = PathBuf::from(entry.path());
+                if !entry.is_dir() {
+                    files.push(entry);
+                }
             }
         } else {
             files.push(input);
         }
     }
+    let progress_bar = ProgressBar::new(files.len() as u64);
+    progress_bar.set_style(ProgressStyle::default_bar()
+            .template("[{elapsed_precise}] [{bar:100.cyan/blue}] {pos}/{len}\n{msg}")
+            .progress_chars("#>-"));
+    let pb_arc = Arc::new(progress_bar);
 
     for input_file in files.into_iter() {
+        let pb = pb_arc.clone();
         let input_filename = input_file.file_name().unwrap().to_os_string();
         let input = input_file.clone().into_os_string().into_string().unwrap();
         let mut output_buf: PathBuf = opt.output.clone();
@@ -104,23 +112,21 @@ fn main() {
         let passed_pars = pars_arc.clone();
         let destination_str = CString::new(output).unwrap();
         let origin_str = CString::new(input).unwrap();
-
         pool.execute(move || {
             let origin: *const c_char = origin_str.as_ptr();
             let destination: *const c_char = destination_str.as_ptr();
+            pb.set_message(&format!("{:?}", origin_str));
             unsafe {
                 cs_compress(origin, destination, &passed_pars);
             }
-            println!(
-                "{:?} -> {:?}",
-                origin_str,
-                destination_str,
-            );
-            // pb.inc(1);
+            pb.inc(1);
+            // println!("{:?} -> {:?}", origin_str, destination_str,);
         });
+        
     }
 
     pool.join();
+    pb_arc.finish_with_message("done");
     // let mut children = vec![];
 
     // for child in children {
