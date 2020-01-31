@@ -1,6 +1,10 @@
+extern crate libc;
+
+use libc::c_int;
+
 #[repr(C)]
 pub struct CsJpegPars {
-    pub quality: i32,
+    pub quality: c_int,
     pub exif_copy: bool,
     dct_method: i32,
     pub scale_factor: f64,

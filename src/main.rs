@@ -1,6 +1,8 @@
 extern crate libc;
 extern crate num_cpus;
 
+use libc::c_int;
+
 use std::path::PathBuf;
 use std::sync::Arc;
 use structopt::StructOpt;
@@ -10,6 +12,7 @@ use std::os::raw::c_char;
 
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
+use indicatif::ProgressDrawTarget;
 use std::process::exit;
 // use std::thread;
 use threadpool::ThreadPool;
@@ -23,6 +26,7 @@ extern "C" {
         origin: *const c_char,
         destination: *const c_char,
         pars: &cspars::CsImagePars,
+        return_value: &i32
     ) -> bool;
 }
 
@@ -72,7 +76,7 @@ fn main() {
     let args: Vec<PathBuf> = opt.files;
 
     let mut cs_pars: cspars::CsImagePars = Default::default();
-    cs_pars.jpeg.quality = opt.quality;
+    cs_pars.jpeg.quality = opt.quality as c_int;
     cs_pars.jpeg.exif_copy = opt.exif;
     cs_pars.jpeg.scale_factor = opt.scale;
     cs_pars.png.scale_factor = opt.scale;
@@ -97,8 +101,9 @@ fn main() {
         }
     }
     let progress_bar = ProgressBar::new(files.len() as u64);
+    progress_bar.set_draw_target(ProgressDrawTarget::stdout_nohz());
     progress_bar.set_style(ProgressStyle::default_bar()
-            .template("[{elapsed_precise}] [{bar:100.cyan/blue}] {pos}/{len}\n{msg}")
+            .template("[{elapsed_precise}] [{wide_bar:.cyan/blue}] {pos}/{len}\n{msg}")
             .progress_chars("#>-"));
     let pb_arc = Arc::new(progress_bar);
 
@@ -112,12 +117,13 @@ fn main() {
         let passed_pars = pars_arc.clone();
         let destination_str = CString::new(output).unwrap();
         let origin_str = CString::new(input).unwrap();
+        let compress_return_value = 0;
         pool.execute(move || {
             let origin: *const c_char = origin_str.as_ptr();
             let destination: *const c_char = destination_str.as_ptr();
             pb.set_message(&format!("{:?}", origin_str));
             unsafe {
-                cs_compress(origin, destination, &passed_pars);
+                cs_compress(origin, destination, &passed_pars, &compress_return_value);
             }
             pb.inc(1);
             // println!("{:?} -> {:?}", origin_str, destination_str,);
@@ -127,13 +133,6 @@ fn main() {
 
     pool.join();
     pb_arc.finish_with_message("done");
-    // let mut children = vec![];
-
-    // for child in children {
-    //     let _ = child.join();
-    //     // pb.inc(1);
-    // }
-    // pb.finish_with_message("done");
 
     exit(0);
 }
