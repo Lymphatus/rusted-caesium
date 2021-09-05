@@ -8,8 +8,9 @@ edition = "2018"
 [dependencies]
 libc = "0.2"
 structopt = "0.3"
-indicatif = "0.13.0"
-threadpool = "1.0"
-walkdir = "2"
-num_cpus = "1.0"
+indicatif = "0.16"
+threadpool = "1.8"
+walkdir = "2.3"
+num_cpus = "1.13"
 mime_guess = "2.0"
+caesium = { path = "../caesium" }
