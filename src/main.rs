@@ -108,7 +108,12 @@ fn main() {
         let output = output_buf.into_os_string().into_string().unwrap();
 
         let mut r_parameters = caesium::initialize_parameters();
-        r_parameters.jpeg.quality = opt.quality;
+        if opt.quality == 0 {
+            r_parameters.jpeg.quality = 100;
+            r_parameters.optimize = true;
+        } else {
+            r_parameters.jpeg.quality = opt.quality;
+        }
         r_parameters.png.level = get_png_level(opt.quality);
         r_parameters.keep_metadata = opt.exif;
 
