@@ -94,8 +94,8 @@ checksum = "14c189c53d098945499cdfa7ecc63567cf3886b3332b312a5b4585d8d3a6a610"
 
 [[package]]
 name = "caesium"
-version = "0.6.0"
-source = "git+https://github.com/Lymphatus/libcaesium-rust.git#10d2be5cfd2355a82febcdf046aa91d245408b31"
+version = "0.7.0"
+source = "git+https://github.com/Lymphatus/libcaesium-rust.git#e3fdde95a196bc1128bfcaf09ba83711940419c2"
 dependencies = [
  "libc",
  "mozjpeg",
